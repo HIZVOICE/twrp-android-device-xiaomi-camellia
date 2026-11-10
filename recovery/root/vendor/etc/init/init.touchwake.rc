@@ -20,20 +20,19 @@
 # Author: cristi, 2026-05-22.
 
 service nvt_touch_wake /system/bin/sh -c "echo 4 > /sys/class/graphics/fb0/blank; sleep 1; echo 0 > /sys/class/graphics/fb0/blank; log -t nvt_touch_wake 'boot toggle fired'"
+    class core
     user root
     group root
-    disabled
     oneshot
     seclabel u:r:recovery:s0
 
 service nvt_touch_wake_watch /system/bin/sh /vendor/etc/init/nvt_touch_wake_watch.sh
+    class core
     user root
     group root
-    disabled
     seclabel u:r:recovery:s0
+    # not oneshot: runs continuously so init respawns it if it ever dies
 
 on boot
-    # Make sure the shell script file has the correct execution permissions.
-    chmod 0755 /vendor/etc/init/nvt_touch_wake_watch.sh
     start nvt_touch_wake
     start nvt_touch_wake_watch

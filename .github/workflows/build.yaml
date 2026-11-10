@@ -6,21 +6,22 @@ on:
       MANIFEST_BRANCH:
         description: 'TWRP Minimal-Manifest Branch'
         required: true
-        default: 'twrp-12.1'
+        default: 'twrp-11'
         type: choice
         options:
+        - twrp-11
+        - twrp-16.0
         - twrp-14.1
         - twrp-12.1
-        - twrp-11
         - twrp-9.0
       DEVICE_TREE:
         description: 'Custom Recovery Tree (URL)' 
         required: true
-        default: 'https://github.com/rwxrx-rx/twrp-android-device-xiaomi-camellia'
+        default: 'https://github.com/HIZVOICE/twrp-android-device-xiaomi-camellia'
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch' 
         required: true
-        default: 'android_12.1'
+        default: 'mastersenpai-touch'
       DEVICE_PATH:
         description: 'Specify your Device Path' 
         required: true
@@ -132,11 +133,25 @@ jobs:
         sudo add-apt-repository universe
         sudo apt -y install libncurses5
 
+    - name: Select JDK & Lunch Combo (by manifest branch)
+      id: buildvars
+      run: |
+        case "${{ github.event.inputs.MANIFEST_BRANCH }}" in
+          twrp-11)   echo "java_version=8"  >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-eng"      >> "$GITHUB_OUTPUT" ;;
+          twrp-12.1) echo "java_version=11" >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-eng"      >> "$GITHUB_OUTPUT" ;;
+          twrp-14.1) echo "java_version=17" >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-bp2a-eng" >> "$GITHUB_OUTPUT" ;;
+          twrp-16.0) echo "java_version=17" >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-bp2a-eng" >> "$GITHUB_OUTPUT" ;;
+          *)         echo "java_version=8"  >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-eng"      >> "$GITHUB_OUTPUT" ;;
+        esac
+        # NOTE (2026-11-10): the original workflow hardcoded Java 17 and the
+        # -bp2a-eng lunch combo, which are only right for twrp-14.1/16.0.
+        # AOSP 11 needs JDK 8 and the plain -eng combo; AOSP 12 needs JDK 11.
+
     - name: Install OpenJDK
       uses: actions/setup-java@v4
       with:
         distribution: zulu
-        java-version: 8
+        java-version: ${{ steps.buildvars.outputs.java_version }}
 
     - name: Install Git-Repo
       run: |
@@ -146,12 +161,13 @@ jobs:
         sudo ln -sf ~/bin/repo /usr/bin/repo
 
     - name: Check Manifest Branch
-      uses: haya14busa/action-cond@v1
       id: manifest
-      with:
-        cond: ${{ contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-11') || contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-12.1') || contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-14.1') }}
-        if_true: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git
-        if_false: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
+      run: |
+        case "${{ github.event.inputs.MANIFEST_BRANCH }}" in
+          twrp-16.0) echo "value=https://github.com/TWRP-Test/platform_manifest_twrp_aosp.git" >> "$GITHUB_OUTPUT" ;;
+          twrp-11|twrp-12.1|twrp-14.1) echo "value=https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git" >> "$GITHUB_OUTPUT" ;;
+          *) echo "value=https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git" >> "$GITHUB_OUTPUT" ;;
+        esac
 
     - name: Initialize Repo
       run: |
@@ -186,7 +202,7 @@ jobs:
         fi
       
     - name: Install Python 2 (Fallback)
-      if: ${{ !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-11') && !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-12.1') && !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-14') }}
+      if: ${{ !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-11') && !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-12.1') && !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-14') && !contains(github.event.inputs.MANIFEST_BRANCH, 'twrp-16') }}
       run: |
         sudo apt -y install python2
         sudo ln -sf /usr/bin/python2 /usr/bin/python
@@ -196,7 +212,7 @@ jobs:
         cd workspace
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        lunch ${{ steps.buildvars.outputs.lunch_target }} && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       
     - name: Define Metadata Variables
       run: |

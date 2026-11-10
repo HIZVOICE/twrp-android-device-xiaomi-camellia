@@ -1,32 +1,18 @@
-#
-# Copyright (C) 2023 The OrangeFox Recovery Project
-#
-# SPDX-License-Identifier: Apache-2.0
-#
-
-# Enable updating of APEXes
-$(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)
-
-# Enable Virtual A/B OTA
-$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)
-
-# Installs developer gsi keys into ramdisk, to boot a developer GSI with verified boot.
-$(call inherit-product, $(SRC_TARGET_DIR)/product/developer_gsi_keys.mk)
-
-# API
-PRODUCT_SHIPPING_API_LEVEL := 30
+LOCAL_PATH := device/xiaomi/camellia
 
 # Dynamic Partitions
 PRODUCT_USE_DYNAMIC_PARTITIONS := true
 
-# A/B
-PRODUCT_PACKAGES += \
-    update_engine \
-    update_engine_sideload \
-    update_verifier
+# VNDK
+PRODUCT_TARGET_VNDK_VERSION := 30
 
-PRODUCT_PACKAGES_DEBUG += \
-    update_engine_client
+# API
+PRODUCT_SHIPPING_API_LEVEL := 30
+
+PRODUCT_PLATFORM := mt6833
+
+# A/B
+ENABLE_VIRTUAL_AB := true
 
 AB_OTA_POSTINSTALL_CONFIG += \
     RUN_POSTINSTALL_system=true \
@@ -34,65 +20,26 @@ AB_OTA_POSTINSTALL_CONFIG += \
     FILESYSTEM_TYPE_system=ext4 \
     POSTINSTALL_OPTIONAL_system=true
 
-AB_OTA_POSTINSTALL_CONFIG += \
-    RUN_POSTINSTALL_vendor=true \
-    POSTINSTALL_PATH_vendor=bin/checkpoint_gc \
-    FILESYSTEM_TYPE_vendor=ext4 \
-    POSTINSTALL_OPTIONAL_vendor=true
-
+# Boot control HAL
 PRODUCT_PACKAGES += \
-    checkpoint_gc \
-    otapreopt_script
-
-# Boot Control
-PRODUCT_PACKAGES += \
-    android.hardware.boot@1.2-service \
-    android.hardware.boot@1.2-mtkimpl \
-    android.hardware.boot@1.2-mtkimpl.recovery
+    android.hardware.boot@1.1-impl
 
 PRODUCT_PACKAGES_DEBUG += \
-    bootctl
+    update_engine_client
 
-# Crypto
-PRODUCT_VENDOR_PROPERTIES += \
-    ro.crypto.volume.filenames_mode=aes-256-cts
-
-# Gatekeeper
 PRODUCT_PACKAGES += \
-    android.hardware.gatekeeper@1.0-service-recovery \
-    android.hardware.gatekeeper@1.0-impl-recovery
-
-PRODUCT_VENDOR_PROPERTIES += \
-    ro.hardware.gatekeeper=beanpod
-
-# Health
+    otapreopt_script \
+    update_engine \
+    update_verifier \
+    update_engine_sideload
+    
+    
 PRODUCT_PACKAGES += \
-   android.hardware.health@2.1-impl \
-   android.hardware.health@2.1-service
+    android.hardware.fastboot@1.0-impl-mock
 
-# Keymaster
-TARGET_RECOVERY_DEVICE_MODULES += \
-    libkeymaster4 \
-    libkeymaster41 \
-    libpuresoftkeymasterdevice
+# health Hal
+PRODUCT_PACKAGES += \
+    android.hardware.health@2.1-impl
 
-RECOVERY_LIBRARY_SOURCE_FILES += \
-    $(TARGET_OUT_SHARED_LIBRARIES)/libkeymaster4.so \
-    $(TARGET_OUT_SHARED_LIBRARIES)/libkeymaster41.so \
-    $(TARGET_OUT_SHARED_LIBRARIES)/libpuresoftkeymasterdevice.so
-
-PRODUCT_VENDOR_PROPERTIES += \
-    ro.hardware.kmsetkey=beanpod
-
-# TEE
-PRODUCT_VENDOR_PROPERTIES += \
-    ro.vendor.mtk_microtrust_tee_support=1 \
-    ro.vendor.mtk_svp_on_mtee_support=1 \
-    ro.vendor.mtk_tee_gp_support=1
-
-# USB
-PRODUCT_SYSTEM_PROPERTIES += \
-    ro.sys.usb.storage.type=mtp
-
-# VNDK
-PRODUCT_TARGET_VNDK_VERSION := 31
+TW_OVERRIDE_SYSTEM_PROPS := \
+    "ro.build.product;ro.build.fingerprint;ro.build.version.incremental;ro.product.device=ro.product.system.device;ro.product.model=ro.product.system.model;ro.product.name=ro.product.system.name"
