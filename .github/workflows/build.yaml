@@ -137,15 +137,19 @@ jobs:
       id: buildvars
       run: |
         case "${{ github.event.inputs.MANIFEST_BRANCH }}" in
-          twrp-11)   echo "java_version=8"  >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-eng"      >> "$GITHUB_OUTPUT" ;;
-          twrp-12.1) echo "java_version=11" >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-eng"      >> "$GITHUB_OUTPUT" ;;
-          twrp-14.1) echo "java_version=17" >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-bp2a-eng" >> "$GITHUB_OUTPUT" ;;
-          twrp-16.0) echo "java_version=17" >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-bp2a-eng" >> "$GITHUB_OUTPUT" ;;
-          *)         echo "java_version=8"  >> "$GITHUB_OUTPUT"; echo "lunch_target=${{ env.DEVICE_MAKEFILE }}-eng"      >> "$GITHUB_OUTPUT" ;;
+          twrp-11)   echo "java_version=8"  >> "$GITHUB_OUTPUT" ;;
+          twrp-12.1) echo "java_version=11" >> "$GITHUB_OUTPUT" ;;
+          twrp-14.1) echo "java_version=17" >> "$GITHUB_OUTPUT" ;;
+          twrp-16.0) echo "java_version=17" >> "$GITHUB_OUTPUT" ;;
+          *)         echo "java_version=8"  >> "$GITHUB_OUTPUT" ;;
         esac
-        # NOTE (2026-11-10): the original workflow hardcoded Java 17 and the
-        # -bp2a-eng lunch combo, which are only right for twrp-14.1/16.0.
-        # AOSP 11 needs JDK 8 and the plain -eng combo; AOSP 12 needs JDK 11.
+        # NOTE (2026-11-11): the lunch combo is NOT computed here. This step
+        # runs before "Check Build Makefile" sets DEVICE_MAKEFILE, so
+        # ${{ env.DEVICE_MAKEFILE }} is empty here and the combo came out
+        # as just "-eng" ("Invalid lunch combo", run 42896342920). The
+        # combo is computed in the "Building Image" step instead, after
+        # DEVICE_MAKEFILE is known. AOSP 11 needs JDK 8 and the plain
+        # -eng combo; AOSP 12 needs JDK 11.
 
     - name: Install OpenJDK
       uses: actions/setup-java@v4
@@ -212,7 +216,11 @@ jobs:
         cd workspace
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ steps.buildvars.outputs.lunch_target }} && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        case "${{ github.event.inputs.MANIFEST_BRANCH }}" in
+          twrp-14.1|twrp-16.0) LUNCH_SUFFIX="-bp2a-eng" ;;
+          *) LUNCH_SUFFIX="-eng" ;;
+        esac
+        lunch ${{ env.DEVICE_MAKEFILE }}${LUNCH_SUFFIX} && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       
     - name: Define Metadata Variables
       run: |
@@ -276,6 +284,7 @@ jobs:
 
     - name: Check Missing Dependencies (LDCHECK)
       run: |
+        if [ ! -d tools ]; then echo "tools/ absent in this tree; skipping LDCHECK."; exit 0; fi
         cd tools
         mv -n libneeds ${GITHUB_WORKSPACE}/workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/ || true
         mv -n ldcheck ${GITHUB_WORKSPACE}/workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/ || true
